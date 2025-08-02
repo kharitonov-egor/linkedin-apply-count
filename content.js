@@ -61,144 +61,238 @@ async function fetchJobData(url) {
   }
 }
 
-// Search for applies and views data in API response
+// Search for all relevant job data in API response
 function searchForApplies(data, sourceUrl) {
   let foundData = {};
   
-  const searchObj = (obj, path = '') => {
-    if (typeof obj === 'object' && obj !== null) {
-      if (typeof obj.applies !== 'undefined') {
-        foundData.applies = obj.applies;
-        console.log(`🎯 FOUND applies: ${obj.applies}`);
-      }
-      if (typeof obj.views !== 'undefined') {
-        foundData.views = obj.views;
-        console.log(`👁️ FOUND views: ${obj.views}`);
-      }
-      
-      if (Array.isArray(obj)) {
-        obj.forEach((item, index) => {
-          searchObj(item, `${path}[${index}]`);
-        });
-      } else {
-        Object.keys(obj).forEach(key => {
-          searchObj(obj[key], path ? `${path}.${key}` : key);
-        });
+  // Extract data from main data object
+  if (data && data.data) {
+    const p = data.data; // root object
+    
+    // Basic metrics
+    if (typeof p.applies !== 'undefined') {
+      foundData.applies = p.applies;
+      console.log(`🎯 FOUND applies: ${p.applies}`);
+    }
+    if (typeof p.views !== 'undefined') {
+      foundData.views = p.views;
+      console.log(`👁️ FOUND views: ${p.views}`);
+    }
+    
+    // Additional data
+    
+    if (p.listedAt) {
+      foundData.listedAt = p.listedAt;
+      foundData.daysLive = Math.floor((Date.now() - p.listedAt) / 86400000); // 24*60*60*1000
+      console.log(`📅 FOUND listedAt: ${p.listedAt}, days live: ${foundData.daysLive}`);
+    }
+    
+    if (p.expireAt) {
+      foundData.expireAt = p.expireAt;
+      foundData.daysUntilClose = Math.floor((p.expireAt - Date.now()) / 86400000);
+      console.log(`⏰ FOUND expireAt: ${p.expireAt}, days until close: ${foundData.daysUntilClose}`);
+    }
+    
+    // Remote work info
+    if (p.workplaceTypes && p.workplaceTypes[0] && p.workplaceTypesResolutionResults) {
+      const workplaceType = p.workplaceTypesResolutionResults[p.workplaceTypes[0]];
+      if (workplaceType && workplaceType.localizedName) {
+        foundData.remote = workplaceType.localizedName;
+        console.log(`🏠 FOUND remote: ${workplaceType.localizedName}`);
       }
     }
-  };
+    
+    // Apply URL
+    if (p.applyMethod && p.applyMethod.companyApplyUrl) {
+      foundData.applyUrl = p.applyMethod.companyApplyUrl;
+      console.log(`🔗 FOUND apply URL: ${p.applyMethod.companyApplyUrl}`);
+    }
+    
+    // Calculate conversion rate
+    if (foundData.applies !== undefined && foundData.views !== undefined && foundData.views > 0) {
+      foundData.conversionRate = ((foundData.applies / foundData.views) * 100).toFixed(1);
+      console.log(`📈 CALCULATED conversion rate: ${foundData.conversionRate}%`);
+    }
+  }
   
-  searchObj(data);
+  // Fallback: search in nested objects if main data not found
+  if (!foundData.applies && !foundData.views) {
+    const searchObj = (obj, path = '') => {
+      if (typeof obj === 'object' && obj !== null) {
+        if (typeof obj.applies !== 'undefined') {
+          foundData.applies = obj.applies;
+          console.log(`🎯 FOUND applies at ${path}: ${obj.applies}`);
+        }
+        if (typeof obj.views !== 'undefined') {
+          foundData.views = obj.views;
+          console.log(`👁️ FOUND views at ${path}: ${obj.views}`);
+        }
+        
+        if (Array.isArray(obj)) {
+          obj.forEach((item, index) => {
+            searchObj(item, `${path}[${index}]`);
+          });
+        } else {
+          Object.keys(obj).forEach(key => {
+            searchObj(obj[key], path ? `${path}.${key}` : key);
+          });
+        }
+      }
+    };
+    
+    searchObj(data);
+    
+    // Recalculate conversion rate if found in fallback
+    if (foundData.applies !== undefined && foundData.views !== undefined && foundData.views > 0) {
+      foundData.conversionRate = ((foundData.applies / foundData.views) * 100).toFixed(1);
+    }
+  }
   
   // Inject into UI if we found any data
-  if (foundData.applies !== undefined || foundData.views !== undefined) {
-    injectApplyCountIntoUI(foundData.applies, foundData.views);
+  if (Object.keys(foundData).length > 0) {
+    injectJobDataIntoUI(foundData);
   }
 }
 
-// Inject apply count and views into LinkedIn UI
-function injectApplyCountIntoUI(appliesCount, viewsCount) {
+// Inject comprehensive job data into LinkedIn UI
+function injectJobDataIntoUI(jobData) {
   // Remove existing element
-  const existingApplyCount = document.getElementById('linkedin-apply-count-inject');
-  if (existingApplyCount) {
-    existingApplyCount.remove();
+  const existingElement = document.getElementById('linkedin-apply-count-inject');
+  if (existingElement) {
+    existingElement.remove();
   }
   
   // Primary target: job details container
   const targetContainer = document.querySelector('.job-details-jobs-unified-top-card__primary-description-container');
   
   if (targetContainer) {
-    const applyCountElement = document.createElement('div');
-    applyCountElement.id = 'linkedin-apply-count-inject';
-    applyCountElement.className = 't-black--light mt2';
-    applyCountElement.style.cssText = `
+    const jobDataElement = document.createElement('div');
+    jobDataElement.id = 'linkedin-apply-count-inject';
+    jobDataElement.className = 't-black--light mt2';
+    jobDataElement.style.cssText = `
       margin-top: 8px;
-      padding: 6px 0;
+      padding: 8px 0;
+      border-top: 1px solid rgba(0,0,0,0.1);
     `;
+    
+    // Add warning color CSS if not exists
+    if (!document.getElementById('job-data-styles')) {
+      const style = document.createElement('style');
+      style.id = 'job-data-styles';
+      style.textContent = `
+        .tvm__text--warning {
+          color: #e74c3c !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
     
     const mainSpan = document.createElement('span');
     mainSpan.setAttribute('dir', 'ltr');
     
-    let innerHTML = '';
+    let lines = [];
     
-    if (appliesCount !== undefined) {
-      innerHTML += `
-        <span class="tvm__text tvm__text--low-emphasis">📊 </span>
-        <span class="tvm__text tvm__text--positive">
-          <strong>${appliesCount} clicked apply</strong>
-        </span>
-      `;
+    // Basic metrics line
+    if (jobData.applies !== undefined || jobData.views !== undefined) {
+      let metricsLine = '';
+      if (jobData.applies !== undefined) {
+        metricsLine += `📊 <strong>${jobData.applies} applies</strong>`;
+      }
+      if (jobData.views !== undefined) {
+        if (metricsLine) metricsLine += ' • ';
+        metricsLine += `👁️ <strong>${jobData.views} views</strong>`;
+      }
+      if (jobData.conversionRate !== undefined) {
+        if (metricsLine) metricsLine += ' • ';
+        const rateColor = jobData.conversionRate > 20 ? 'tvm__text--positive' : 'tvm__text--low-emphasis';
+        metricsLine += `📈 <span class="${rateColor}"><strong>${jobData.conversionRate}% conversion</strong></span>`;
+      }
+      lines.push(metricsLine);
     }
     
-    if (viewsCount !== undefined) {
-      if (innerHTML) innerHTML += '<br>';
-      innerHTML += `
-        <span class="tvm__text tvm__text--low-emphasis">👁️ </span>
-        <span class="tvm__text tvm__text--positive">
-          <strong>${viewsCount} views</strong>
-        </span>
-      `;
+    // Timing information line
+    if (jobData.daysLive !== undefined || jobData.daysUntilClose !== undefined) {
+      let timingLine = '';
+      if (jobData.daysLive !== undefined) {
+        const liveColor = jobData.daysLive > 30 ? 'tvm__text--low-emphasis' : 'tvm__text--positive';
+        timingLine += `📅 <span class="${liveColor}"><strong>${jobData.daysLive} days live</strong></span>`;
+      }
+      if (jobData.daysUntilClose !== undefined) {
+        if (timingLine) timingLine += ' • ';
+        const closeColor = jobData.daysUntilClose < 7 ? 'tvm__text--warning' : 'tvm__text--low-emphasis';
+        if (jobData.daysUntilClose > 0) {
+          timingLine += `⏰ <span class="${closeColor}"><strong>${jobData.daysUntilClose} days left</strong></span>`;
+        } else {
+          timingLine += `⏰ <span class="tvm__text--warning"><strong>Expired ${Math.abs(jobData.daysUntilClose)} days ago</strong></span>`;
+        }
+      }
+      lines.push(timingLine);
     }
+    
+    // Additional info line
+    if (jobData.remote) {
+      const remoteIcon = jobData.remote.toLowerCase().includes('remote') ? '🏠' : '🏢';
+      const infoLine = `${remoteIcon} <strong>${jobData.remote}</strong>`;
+      lines.push(infoLine);
+    }
+    
+    // Build final HTML
+    const innerHTML = lines.map(line => 
+      `<span class="tvm__text tvm__text--low-emphasis">${line}</span>`
+    ).join('<br>');
     
     mainSpan.innerHTML = innerHTML;
-    applyCountElement.appendChild(mainSpan);
-    targetContainer.insertAdjacentElement('afterend', applyCountElement);
+    jobDataElement.appendChild(mainSpan);
+    targetContainer.insertAdjacentElement('afterend', jobDataElement);
     
-    console.log('✅ Successfully injected data into job details!');
+    console.log('✅ Successfully injected comprehensive job data!');
     return;
   }
   
   // Fallback: tertiary container
   const fallbackContainer = document.querySelector('.job-details-jobs-unified-top-card__tertiary-description-container');
   if (fallbackContainer) {
-    const applyCountElement = document.createElement('div');
-    applyCountElement.id = 'linkedin-apply-count-inject';
-    applyCountElement.className = 't-black--light mt2';
-    applyCountElement.style.cssText = `
+    const jobDataElement = document.createElement('div');
+    jobDataElement.id = 'linkedin-apply-count-inject';
+    jobDataElement.className = 't-black--light mt2';
+    jobDataElement.style.cssText = `
       margin-top: 8px;
       margin-left: 24px;
       padding: 6px 0;
     `;
     
-    const mainSpan = document.createElement('span');
-    mainSpan.setAttribute('dir', 'ltr');
-    
-    let innerHTML = '';
-    
-    if (appliesCount !== undefined) {
-      innerHTML += `
-        <span class="tvm__text tvm__text--low-emphasis">📊 </span>
-        <span class="tvm__text tvm__text--positive">
-          <strong>${appliesCount} clicked apply</strong>
-        </span>
-      `;
+    // Compact version for fallback
+    let compactInfo = '';
+    if (jobData.applies !== undefined) {
+      compactInfo += `📊 ${jobData.applies}`;
+    }
+    if (jobData.views !== undefined) {
+      if (compactInfo) compactInfo += ' • ';
+      compactInfo += `👁️ ${jobData.views}`;
+    }
+    if (jobData.conversionRate !== undefined) {
+      if (compactInfo) compactInfo += ' • ';
+      compactInfo += `📈 ${jobData.conversionRate}%`;
+    }
+    if (jobData.daysLive !== undefined) {
+      if (compactInfo) compactInfo += ' • ';
+      compactInfo += `📅 ${jobData.daysLive}d`;
     }
     
-    if (viewsCount !== undefined) {
-      if (innerHTML) innerHTML += '<br>';
-      innerHTML += `
-        <span class="tvm__text tvm__text--low-emphasis">👁️ </span>
-        <span class="tvm__text tvm__text--positive">
-          <strong>${viewsCount} views</strong>
-        </span>
-      `;
-    }
+    jobDataElement.innerHTML = `<span class="tvm__text tvm__text--low-emphasis">${compactInfo}</span>`;
+    fallbackContainer.insertAdjacentElement('afterend', jobDataElement);
     
-    mainSpan.innerHTML = innerHTML;
-    applyCountElement.appendChild(mainSpan);
-    fallbackContainer.insertAdjacentElement('afterend', applyCountElement);
-    
-    console.log('✅ Successfully injected data into tertiary container!');
+    console.log('✅ Successfully injected compact job data!');
     return;
   }
   
   // Final fallback: floating element
   console.log('📍 No suitable container found, creating floating element');
-  createFloatingApplyCount(appliesCount, viewsCount);
+  createFloatingJobData(jobData);
 }
 
 // Create floating notification as last resort
-function createFloatingApplyCount(appliesCount, viewsCount) {
+function createFloatingJobData(jobData) {
   const existingFloat = document.getElementById('linkedin-apply-count-float');
   if (existingFloat) {
     existingFloat.remove();
@@ -214,25 +308,54 @@ function createFloatingApplyCount(appliesCount, viewsCount) {
     color: white;
     padding: 12px 16px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     z-index: 10000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     animation: slideIn 0.3s ease-out;
-    line-height: 1.5;
+    line-height: 1.4;
+    max-width: 300px;
   `;
   
-  let content = '';
-  if (appliesCount !== undefined) {
-    content += `📊 ${appliesCount} clicked apply`;
-  }
-  if (viewsCount !== undefined) {
-    if (content) content += '<br>';
-    content += `👁️ ${viewsCount} views`;
+  let lines = [];
+  
+  // Basic metrics
+  if (jobData.applies !== undefined || jobData.views !== undefined) {
+    let line = '';
+    if (jobData.applies !== undefined) {
+      line += `📊 ${jobData.applies} applies`;
+    }
+    if (jobData.views !== undefined) {
+      if (line) line += ' • ';
+      line += `👁️ ${jobData.views} views`;
+    }
+    if (jobData.conversionRate !== undefined) {
+      if (line) line += ' • ';
+      line += `📈 ${jobData.conversionRate}%`;
+    }
+    lines.push(line);
   }
   
-  floatingElement.innerHTML = content;
+  // Timing info
+  if (jobData.daysLive !== undefined) {
+    lines.push(`📅 ${jobData.daysLive} days live`);
+  }
+  if (jobData.daysUntilClose !== undefined) {
+    if (jobData.daysUntilClose > 0) {
+      lines.push(`⏰ ${jobData.daysUntilClose} days left`);
+    } else {
+      lines.push(`⏰ Expired ${Math.abs(jobData.daysUntilClose)} days ago`);
+    }
+  }
+  
+  // Additional info
+  if (jobData.remote) {
+    const icon = jobData.remote.toLowerCase().includes('remote') ? '🏠' : '🏢';
+    lines.push(`${icon} ${jobData.remote}`);
+  }
+  
+  floatingElement.innerHTML = lines.join('<br>');
   
   // Add CSS animation
   if (!document.getElementById('apply-count-styles')) {
@@ -243,21 +366,24 @@ function createFloatingApplyCount(appliesCount, viewsCount) {
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
       }
+      .tvm__text--warning {
+        color: #e74c3c !important;
+      }
     `;
     document.head.appendChild(style);
   }
   
   document.body.appendChild(floatingElement);
   
-  // Auto-remove after 5 seconds
+  // Auto-remove after 8 seconds (more time for more data)
   setTimeout(() => {
     if (floatingElement.parentNode) {
       floatingElement.style.animation = 'slideIn 0.3s ease-out reverse';
       setTimeout(() => floatingElement.remove(), 300);
     }
-  }, 5000);
+  }, 8000);
   
-  console.log('✅ Created floating notification!');
+  console.log('✅ Created comprehensive floating notification!');
 }
 
 // URL-based approach: extract job ID and fetch data
