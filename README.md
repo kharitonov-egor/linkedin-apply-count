@@ -1,15 +1,13 @@
 # LinkedIn Apply Count
 
-This browser extension allows to view exact count of people that clicked apply button and viewed application on Linkedin. 
+This browser extension allows to view exact count of people that clicked apply button and viewed job application on Linkedin. 
 
-See the real applicant & view counts right inside every LinkedIn Job post.
-
-<img width="578" height="233" alt="Screenshot 2025-08-02 160457" src="https://github.com/user-attachments/assets/9f57eaa2-3556-4c63-b0d0-ffa1286494e5" />
+<img width="536" height="269" alt="marleting_linkedin" src="https://github.com/user-attachments/assets/cddb2870-f461-4046-b1dd-839f33bc4d6e" />
 
 ## Download intructions:
 
 1. `git clone https://github.com/kharitonov-egor/linkedin-apply-count.git`
-2. Open your browser (chrome://extensions for Chrome)
+2. Open Chrome and navigate to the Extensions page (`chrome://extensions`)
 3. Turn on Developer Mode in the top right of the screen
 4. Click on load unpacked in the top left
 5. Choose the folder that you just cloned
