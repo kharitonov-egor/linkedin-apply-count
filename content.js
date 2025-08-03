@@ -196,7 +196,7 @@ function injectJobDataIntoUI(jobData) {
     if (jobData.applies !== undefined || jobData.views !== undefined) {
       let metricsLine = '';
       if (jobData.applies !== undefined) {
-        metricsLine += `📊 <strong>${jobData.applies} applies</strong>`;
+        metricsLine += `📊 <strong>${jobData.applies} clicked apply</strong>`;
       }
       if (jobData.views !== undefined) {
         if (metricsLine) metricsLine += ' • ';
