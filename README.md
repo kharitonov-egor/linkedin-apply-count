@@ -2,7 +2,7 @@
 
 This browser extension allows to view exact count of people that clicked apply button and viewed job application on Linkedin. 
 
-<img width="536" height="269" alt="marleting_linkedin" src="https://github.com/user-attachments/assets/cddb2870-f461-4046-b1dd-839f33bc4d6e" />
+<img width="616" height="232" alt="Screenshot 2025-08-06 040144" src="https://github.com/user-attachments/assets/a1642089-dbc2-4b0d-8500-db29223a88fe" />
 
 ## Download intructions:
 
